@@ -25,12 +25,24 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
+
+
+def log(message: str = "") -> None:
+    """Print ``message`` to the run log, prefixing each line with a timestamp.
+
+    Output is line-buffered-friendly so the cron log stays readable. Blank
+    lines are kept (timestamped) to preserve the existing visual spacing.
+    """
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for line in message.split("\n"):
+        print(f"[{stamp}] {line}", flush=True)
 
 # Repository root (parent of this scripts/ directory).
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = ROOT / "config.json"
-DEFAULT_TMP = ROOT / "tmp"
+DEFAULT_TMP = ROOT / "data/tmp"
 
 # Where each agent keeps its skills. Resolved at runtime so $HOME is honoured.
 SKILL_TARGETS = {
@@ -119,7 +131,7 @@ def find_skills(root: Path) -> dict[str, Path]:
         name = header["name"]
         skill_dir = skill_md.parent
         if name in skills:
-            print(f"  ! duplicate skill name '{name}' at {skill_dir} (keeping {skills[name]})")
+            log(f"  ! duplicate skill name '{name}' at {skill_dir} (keeping {skills[name]})")
             continue
         skills[name] = skill_dir
     return skills
@@ -132,7 +144,7 @@ def clone_repo(url: str, dest: Path) -> bool:
     """Shallow-clone ``url`` into ``dest``. Returns True on success."""
     if dest.exists():
         shutil.rmtree(dest)
-    print(f"  cloning {url}")
+    log(f"  cloning {url}")
     result = subprocess.run(
         ["git", "clone", "--depth", "1", url, str(dest)],
         stdout=subprocess.PIPE,
@@ -140,7 +152,7 @@ def clone_repo(url: str, dest: Path) -> bool:
         text=True,
     )
     if result.returncode != 0:
-        print(f"  ! clone failed:\n{result.stdout.strip()}")
+        log(f"  ! clone failed:\n{result.stdout.strip()}")
         return False
     return True
 
@@ -168,7 +180,7 @@ def update_target(remote_skills: dict[str, Path], target_name: str, target_root:
     update spec. Returns the number of skills updated.
     """
     if not target_root.exists():
-        print(f"  - {target_name}: skill dir {target_root} missing, skipping")
+        log(f"  - {target_name}: skill dir {target_root} missing, skipping")
         return 0
 
     local_skills = find_skills(target_root)
@@ -178,7 +190,7 @@ def update_target(remote_skills: dict[str, Path], target_name: str, target_root:
             continue
         target_dir = local_skills[name]
         action = "would update" if dry_run else "updating"
-        print(f"  - {target_name}: {action} '{name}' -> {target_dir}")
+        log(f"  - {target_name}: {action} '{name}' -> {target_dir}")
         if not dry_run:
             replace_skill(remote_dir, target_dir)
         updated += 1
@@ -193,21 +205,21 @@ def fetch_all(config: dict, tmp_root: Path, targets: dict[str, Path],
     """Run the full fetch/update cycle. Returns total skills updated."""
     urls = config["git_repo_urls"]
     if not urls:
-        print("No git_repo_urls configured; nothing to do.")
+        log("No git_repo_urls configured; nothing to do.")
         return 0
 
     tmp_root.mkdir(parents=True, exist_ok=True)
     total_updated = 0
 
     for url in urls:
-        print(f"\n== {url} ==")
+        log(f"\n== {url} ==")
         # Use a unique temp dir per repo to avoid name collisions.
         repo_dir = Path(tempfile.mkdtemp(prefix="repo-", dir=tmp_root))
         try:
             if not clone_repo(url, repo_dir):
                 continue
             remote_skills = find_skills(repo_dir)
-            print(f"  found {len(remote_skills)} skill(s) in repo")
+            log(f"  found {len(remote_skills)} skill(s) in repo")
             for target_name, target_root in targets.items():
                 total_updated += update_target(
                     remote_skills, target_name, target_root, dry_run=dry_run
@@ -216,7 +228,7 @@ def fetch_all(config: dict, tmp_root: Path, targets: dict[str, Path],
             # Always remove the copied git repo.
             shutil.rmtree(repo_dir, ignore_errors=True)
 
-    print(f"\nDone. {total_updated} skill update(s) "
+    log(f"\nDone. {total_updated} skill update(s) "
           f"{'simulated' if dry_run else 'applied'}.")
     return total_updated
 

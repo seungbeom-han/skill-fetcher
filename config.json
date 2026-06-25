@@ -1,7 +1,7 @@
 {
 	"crontab_args": {
 		"minute": "0",
-		"hour": "24",
+		"hour": "0",
 		"day_of_month": "*",
 		"month": "*",
 		"day_of_week": "*"
