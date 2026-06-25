@@ -1,0 +1,12 @@
+{
+	"crontab_args": {
+		"minute": "0",
+		"hour": "24",
+		"day_of_month": "*",
+		"month": "*",
+		"day_of_week": "*"
+	},
+	"git_repo_urls": [
+		"https://github.com/example/agent-skills.git"
+	]
+}
